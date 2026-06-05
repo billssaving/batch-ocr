@@ -8,7 +8,7 @@ import cv2
 import numpy as np
 from fastapi import FastAPI, File, UploadFile, Form, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import StreamingResponse
+from fastapi.responses import StreamingResponse, HTMLResponse
 
 # Logging
 logger = logging.getLogger("batch-ocr")
@@ -73,10 +73,51 @@ def process_single_file(filename: str, contents: bytes, language: str):
         logger.error(f"Error processing {filename}: {err}")
         return filename, "", err
 
-# Routes
+# Serve index.html directly
+INDEX_HTML = """
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="UTF-8">
+<title>Batch OCR</title>
+</head>
+<body>
+<h1>Batch OCR</h1>
+<form id="ocrForm">
+<label>Language:</label>
+<input type="text" id="language" value="eng">
+<label>Select images:</label>
+<input type="file" id="files" multiple>
+<button type="submit">Start OCR</button>
+</form>
+<script>
+document.getElementById("ocrForm").addEventListener("submit",async(e)=>{
+e.preventDefault();
+const files=document.getElementById("files").files;
+const lang=document.getElementById("language").value;
+const formData=new FormData();
+for(let f of files) formData.append("files",f);
+formData.append("language",lang);
+const res=await fetch("/upload",{method:"POST",body:formData});
+const blob=await res.blob();
+const url=URL.createObjectURL(blob);
+const a=document.createElement("a");
+a.href=url;
+a.download="ocr_results.csv";
+a.click();
+});
+</script>
+</body>
+</html>
+"""
+
+@app.get("/", response_class=HTMLResponse)
+async def serve_index():
+    return INDEX_HTML
+
 @app.get("/health")
 async def health():
-    return {"status": "ok"}
+    return {"status":"ok"}
 
 @app.post("/upload")
 async def upload_files(
@@ -111,7 +152,6 @@ async def upload_files(
         headers={"Content-Disposition": "attachment; filename=ocr_results.csv"},
     )
 
-# Uvicorn entrypoint
 if __name__ == "__main__":
     import uvicorn
     uvicorn.run("main:app", host="0.0.0.0", port=8000)
