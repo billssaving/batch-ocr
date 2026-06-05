@@ -3,7 +3,6 @@ import csv
 import logging
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from typing import List
-
 import easyocr
 import cv2
 import numpy as np
@@ -11,7 +10,7 @@ from fastapi import FastAPI, File, UploadFile, Form, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import StreamingResponse
 
-# ---------- Logging ----------
+# Logging
 logger = logging.getLogger("batch-ocr")
 logger.setLevel(logging.INFO)
 handler = logging.StreamHandler()
@@ -19,9 +18,8 @@ formatter = logging.Formatter("%(asctime)s - %(name)s - %(levelname)s - %(messag
 handler.setFormatter(formatter)
 logger.addHandler(handler)
 
-# ---------- FastAPI app ----------
+# FastAPI app
 app = FastAPI(title="Batch OCR System")
-
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"],
@@ -29,10 +27,8 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-# ---------- EasyOCR reader (single global) ----------
+# EasyOCR reader
 _reader = None
-
-
 def get_reader(language: str = "eng"):
     global _reader
     if _reader is None:
@@ -41,26 +37,21 @@ def get_reader(language: str = "eng"):
         logger.info("EasyOCR ready.")
     return _reader
 
-
-# ---------- Helpers ----------
+# Helpers
 ALLOWED_EXTENSIONS = {".png", ".jpg", ".jpeg", ".tiff", ".tif", ".bmp", ".gif"}
-
 
 def clean_text(raw: str) -> str:
     text = raw.replace("\n", " ").replace("\r", " ")
     text = " ".join(text.split())
     return text.strip()
 
-
 def validate_files(files: List[UploadFile]) -> bool:
     from pathlib import Path
-
     for file in files:
         ext = Path(file.filename).suffix.lower()
         if ext not in ALLOWED_EXTENSIONS:
             return False
     return True
-
 
 def ocr_image(image_bytes: bytes, language: str = "eng") -> str:
     reader = get_reader(language)
@@ -70,7 +61,6 @@ def ocr_image(image_bytes: bytes, language: str = "eng") -> str:
         raise ValueError("Unable to decode image.")
     result = reader.readtext(img, detail=0, paragraph=True)
     return " ".join(result)
-
 
 def process_single_file(filename: str, contents: bytes, language: str):
     try:
@@ -83,12 +73,10 @@ def process_single_file(filename: str, contents: bytes, language: str):
         logger.error(f"Error processing {filename}: {err}")
         return filename, "", err
 
-
-# ---------- Routes ----------
+# Routes
 @app.get("/health")
 async def health():
     return {"status": "ok"}
-
 
 @app.post("/upload")
 async def upload_files(
@@ -99,7 +87,6 @@ async def upload_files(
         raise HTTPException(status_code=400, detail="Unsupported file type.")
 
     results = []
-
     with ThreadPoolExecutor(max_workers=4) as executor:
         future_to_file = {}
         for file in files:
@@ -118,16 +105,13 @@ async def upload_files(
         writer.writerow([row["filename"], row["text"]])
 
     csv_buffer.seek(0)
-
     return StreamingResponse(
         iter([csv_buffer.getvalue()]),
         media_type="text/csv",
         headers={"Content-Disposition": "attachment; filename=ocr_results.csv"},
     )
 
-
-# ---------- Uvicorn entrypoint ----------
+# Uvicorn entrypoint
 if __name__ == "__main__":
     import uvicorn
-
     uvicorn.run("main:app", host="0.0.0.0", port=8000)
