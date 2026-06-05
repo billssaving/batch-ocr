@@ -1,0 +1,34 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="UTF-8">
+<title>Batch OCR</title>
+</head>
+<body>
+<h1>Batch OCR</h1>
+<form id="ocrForm">
+<label>Language:</label>
+<input type="text" id="language" value="eng">
+<label>Select images:</label>
+<input type="file" id="files" multiple>
+<button type="submit">Start OCR</button>
+</form>
+<script>
+document.getElementById("ocrForm").addEventListener("submit",async(e)=>{
+e.preventDefault();
+const files=document.getElementById("files").files;
+const lang=document.getElementById("language").value;
+const formData=new FormData();
+for(let f of files) formData.append("files",f);
+formData.append("language",lang);
+const res=await fetch("/upload",{method:"POST",body:formData});
+const blob=await res.blob();
+const url=URL.createObjectURL(blob);
+const a=document.createElement("a");
+a.href=url;
+a.download="ocr_results.csv";
+a.click();
+});
+</script>
+</body>
+</html>
